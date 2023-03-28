@@ -1,5 +1,6 @@
 import { UserOperation } from "./types";
-import { AbiCoder, keccak256, BytesLike } from "ethers";
+import { AbiCoder, keccak256, BytesLike, JsonRpcPayload } from "ethers";
+import * as RPC from "./rpc";
 
 const defaultABICoder = AbiCoder.defaultAbiCoder();
 
@@ -17,27 +18,6 @@ const userOp: UserOperation = {
 };
 
 export const packUserOp = (op: UserOperation): string => {
-  // const userOpType = {
-  //   components: [
-  //     { type: 'address', name: 'sender' },
-  //     { type: 'uint256', name: 'nonce' },
-  //     { type: 'bytes', name: 'initCode' },
-  //     { type: 'bytes', name: 'callData' },
-  //     { type: 'uint256', name: 'callGasLimit' },
-  //     { type: 'uint256', name: 'verificationGasLimit' },
-  //     { type: 'uint256', name: 'preVerificationGas' },
-  //     { type: 'uint256', name: 'maxFeePerGas' },
-  //     { type: 'uint256', name: 'maxPriorityFeePerGas' },
-  //     { type: 'bytes', name: 'paymasterAndData' },
-  //     { type: 'bytes', name: 'signature' }
-  //   ],
-  //   name: 'userOp',
-  //   type: 'tuple'
-  // };
-  // let encoded = defaultABICoder.encode([userOpType as any], [{ ...op, signature: '0x' }]);
-  // encoded = `0x${encoded.slice(66, encoded.length - 64)}`;
-  // return encoded;
-
   const typeValues = [
     { type: 'address', val: op.sender },
     { type: 'uint256', val: op.nonce },
@@ -51,11 +31,27 @@ export const packUserOp = (op: UserOperation): string => {
     { type: 'bytes', val: op.paymasterAndData }
   ];
 
-  const types = typeValues.map(typeValue => typeValue.type);
-  const values = typeValues.map((typeValue) => typeValue.type === 'bytes' ? keccak256(typeValue.val as BytesLike) : typeValue.val);
+  const types = typeValues.map(typeValue => typeValue.type === 'bytes' ? 'bytes32' : typeValue.type);
+  const values = typeValues.map(typeValue => typeValue.type === 'bytes' ? keccak256(typeValue.val as BytesLike) : typeValue.val);
   return defaultABICoder.encode(types, values);
 }
 
+export const getUserOpHash = (op: UserOperation, entrypoint: string, chainId: number): string => {
+  const userOpHash = keccak256(packUserOp(op));
+  const enc = defaultABICoder.encode(
+    ['bytes32', 'address', 'uint256'],
+    [userOpHash, entrypoint, chainId]
+  );
+  return keccak256(enc);
+}
+
 const encoded = packUserOp(userOp);
-console.log(`GOT ENCODED`);
-console.log(encoded);
+
+const payload: JsonRpcPayload = {
+  id: 1,
+  jsonrpc: '2.0',
+  method: RPC.ETH_SEND_USER_OPERATION,
+  params: [encoded]
+}
+
+console.log(payload);
